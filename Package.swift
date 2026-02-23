@@ -19,5 +19,9 @@ let package = Package(
         .target(
             name: "PageSwipeKit"
         ),
+        .testTarget(
+            name: "PageSwipeKitTests",
+            dependencies: ["PageSwipeKit"]
+        ),
     ]
 )
