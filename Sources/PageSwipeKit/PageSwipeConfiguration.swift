@@ -2,67 +2,81 @@
 //  PageSwipeConfiguration.swift
 //  PageSwipeKit
 //
-//  Created by stoyan on 20.02.26.
+//  Created by stoyan on 23.02.26.
 //
 
-import SwiftUI
+import UIKit
 
-/// Configuration for the PageSwipeView behavior and appearance.
-public struct PageSwipeConfiguration {
-    
-    // MARK: - Presets
-    
-    /// Default configuration with uniform scaling.
-    nonisolated(unsafe) public static let `default` = PageSwipeConfiguration()
-    
-    /// Configuration without scaling - pages slide without shrinking.
-    nonisolated(unsafe) public static let noScale = PageSwipeConfiguration(scalingBehavior: .none)
-    
-    /// Configuration with progressive scaling - pages scale based on distance from center.
-    nonisolated(unsafe) public static let progressive = PageSwipeConfiguration(scalingBehavior: .progressive)
+// MARK: - PageSwipeConfiguration
+
+/// Configuration for page swipe behavior and appearance.
+public struct PageSwipeConfiguration: Sendable {
     
     // MARK: - Properties
     
-    /// The corner radius of pages. Defaults to device screen corner radius approximation.
-    public var cornerRadius: CGFloat
-    
-    /// The gap between pages during transition (in points).
-    public var pageGap: CGFloat
-    
-    /// How pages should scale during transitions.
+    /// How pages should scale during transitions. Default: .uniform
     public var scalingBehavior: ScalingBehavior
     
-    /// The scale factor applied to pages during transition (0.0 to 1.0).
+    /// Scale factor applied to pages during transitions (0.0-1.0). Default: 0.92
     /// For uniform scaling, all pages use this scale.
     /// For progressive scaling, this is the minimum scale for off-center pages.
     public var transitionScale: CGFloat
     
-    /// Velocity threshold to trigger page change even if drag distance is small.
+    /// Base corner radius for pages. Adjusts concentrically during scaling. Default: 44
+    public var cornerRadius: CGFloat
+    
+    /// Minimum swipe velocity (pts/sec) to trigger page change. Default: 300
     public var velocityThreshold: CGFloat
     
-    /// Animation used for snapping to pages.
-    public var snapAnimation: Animation
+    /// Duration of the scale-down animation when dragging begins. Default: 0.15
+    public var scaleDownDuration: TimeInterval
     
-    /// Rubber band resistance factor (0.0 = no resistance, 1.0 = full resistance).
-    public var rubberBandResistance: CGFloat
+    /// Duration of the spring animation when restoring scale. Default: 0.35
+    public var restoreDuration: TimeInterval
+    
+    /// Spring damping ratio for restore animation (0.0-1.0). Default: 0.8
+    public var springDamping: CGFloat
     
     // MARK: - Initialization
     
     public init(
-        cornerRadius: CGFloat = 64,
-        pageGap: CGFloat = 8,
         scalingBehavior: ScalingBehavior = .uniform,
         transitionScale: CGFloat = 0.92,
+        cornerRadius: CGFloat = 44,
         velocityThreshold: CGFloat = 300,
-        snapAnimation: Animation = .interpolatingSpring(stiffness: 300, damping: 30),
-        rubberBandResistance: CGFloat = 0.55
+        scaleDownDuration: TimeInterval = 0.15,
+        restoreDuration: TimeInterval = 0.35,
+        springDamping: CGFloat = 0.8
     ) {
-        self.cornerRadius = cornerRadius
-        self.pageGap = pageGap
         self.scalingBehavior = scalingBehavior
         self.transitionScale = transitionScale
+        self.cornerRadius = cornerRadius
         self.velocityThreshold = velocityThreshold
-        self.snapAnimation = snapAnimation
-        self.rubberBandResistance = rubberBandResistance
+        self.scaleDownDuration = scaleDownDuration
+        self.restoreDuration = restoreDuration
+        self.springDamping = springDamping
+    }
+}
+
+// MARK: - Static Presets
+
+extension PageSwipeConfiguration {
+    
+    /// Creates a configuration with default values.
+    public static var `default`: PageSwipeConfiguration {
+        PageSwipeConfiguration()
+    }
+    
+    /// Configuration with no scaling effect.
+    public static var noScale: PageSwipeConfiguration {
+        PageSwipeConfiguration(
+            scalingBehavior: .none,
+            transitionScale: 1.0
+        )
+    }
+    
+    /// Configuration with progressive scaling - pages scale based on distance from center.
+    public static var progressive: PageSwipeConfiguration {
+        PageSwipeConfiguration(scalingBehavior: .progressive)
     }
 }

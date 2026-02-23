@@ -1,8 +1,8 @@
 //
 //  SettingsView.swift
-//  PageSwipeKitExample
+//  ScrollViewTest
 //
-//  Created by stoyan on 20.02.26.
+//  Settings view for configuring PageSwipeConfiguration.
 //
 
 import SwiftUI
@@ -14,8 +14,6 @@ struct SettingsView: View {
     
     @Binding var configuration: PageSwipeConfiguration
     @Environment(\.dismiss) private var dismiss
-    @State private var stiffness: Double = 300
-    @State private var damping: Double = 30
     
     // MARK: - Body
     
@@ -76,7 +74,7 @@ extension SettingsView {
         case .none:
             return "Pages remain full size during transitions."
         case .uniform:
-            return "All pages scale together when dragging begins."
+            return "All pages scale uniformly when dragging begins."
         case .progressive:
             return "Pages scale based on distance from center."
         }
@@ -97,16 +95,6 @@ extension SettingsView {
                         .foregroundStyle(.secondary)
                 }
                 Slider(value: $configuration.cornerRadius, in: 0...100, step: 1)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Page Gap")
-                    Spacer()
-                    Text("\(Int(configuration.pageGap)) pt")
-                        .foregroundStyle(.secondary)
-                }
-                Slider(value: $configuration.pageGap, in: 0...50, step: 1)
             }
         } header: {
             Text("Appearance")
@@ -131,20 +119,10 @@ extension SettingsView {
                 }
                 Slider(value: $configuration.velocityThreshold, in: 100...1000, step: 50)
             }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Rubber Band Resistance")
-                    Spacer()
-                    Text(String(format: "%.2f", configuration.rubberBandResistance))
-                        .foregroundStyle(.secondary)
-                }
-                Slider(value: $configuration.rubberBandResistance, in: 0...1, step: 0.05)
-            }
         } header: {
             Text("Gesture")
         } footer: {
-            Text("Velocity threshold determines how fast you need to swipe to change pages. Rubber band controls edge bounce resistance.")
+            Text("Velocity threshold determines how fast you need to swipe to change pages.")
         }
     }
 }
@@ -157,33 +135,37 @@ extension SettingsView {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Spring Stiffness")
+                    Text("Scale Down Duration")
                     Spacer()
-                    Text("\(Int(stiffness))")
+                    Text(String(format: "%.2fs", configuration.scaleDownDuration))
                         .foregroundStyle(.secondary)
                 }
-                Slider(value: $stiffness, in: 50...500, step: 10)
-                    .onChange(of: stiffness) { newValue in
-                        configuration.snapAnimation = .interpolatingSpring(stiffness: newValue, damping: damping)
-                    }
+                Slider(value: $configuration.scaleDownDuration, in: 0.05...0.5, step: 0.05)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Restore Duration")
+                    Spacer()
+                    Text(String(format: "%.2fs", configuration.restoreDuration))
+                        .foregroundStyle(.secondary)
+                }
+                Slider(value: $configuration.restoreDuration, in: 0.1...0.8, step: 0.05)
             }
             
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Spring Damping")
                     Spacer()
-                    Text("\(Int(damping))")
+                    Text(String(format: "%.2f", configuration.springDamping))
                         .foregroundStyle(.secondary)
                 }
-                Slider(value: $damping, in: 5...60, step: 1)
-                    .onChange(of: damping) { newValue in
-                        configuration.snapAnimation = .interpolatingSpring(stiffness: stiffness, damping: newValue)
-                    }
+                Slider(value: $configuration.springDamping, in: 0.3...1.0, step: 0.05)
             }
         } header: {
             Text("Animation")
         } footer: {
-            Text("Controls the snap animation when releasing a page. Higher stiffness = faster, higher damping = less bounce.")
+            Text("Controls the animation timing. Lower spring damping = more bounce.")
         }
     }
 }
@@ -208,25 +190,25 @@ extension SettingsView {
             
             Button("Bouncy") {
                 configuration = PageSwipeConfiguration(
-                    cornerRadius: 64,
-                    pageGap: 8,
                     scalingBehavior: .uniform,
                     transitionScale: 0.88,
+                    cornerRadius: 64,
                     velocityThreshold: 200,
-                    snapAnimation: .interpolatingSpring(stiffness: 200, damping: 15),
-                    rubberBandResistance: 0.3
+                    scaleDownDuration: 0.15,
+                    restoreDuration: 0.5,
+                    springDamping: 0.5
                 )
             }
             
             Button("Snappy") {
                 configuration = PageSwipeConfiguration(
-                    cornerRadius: 64,
-                    pageGap: 8,
                     scalingBehavior: .uniform,
                     transitionScale: 0.95,
+                    cornerRadius: 44,
                     velocityThreshold: 400,
-                    snapAnimation: .interpolatingSpring(stiffness: 500, damping: 40),
-                    rubberBandResistance: 0.7
+                    scaleDownDuration: 0.1,
+                    restoreDuration: 0.25,
+                    springDamping: 0.9
                 )
             }
         } header: {

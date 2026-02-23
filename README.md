@@ -1,18 +1,17 @@
 # PageSwipeKit
 
-A SwiftUI component that mimics the iOS app switcher page swiping behavior with smooth animations, configurable scaling, and dynamic page management.
+A UIKit-based paging controller that mimics the iOS app switcher behavior with smooth animations, configurable scaling, and dynamic page management.
 
 ## Features
 
-- **Interactive drag gesture** with velocity-based snapping
+- **UIKit-native paging** using `UICollectionView` with diffable data source
 - **Concentric corner radius** alignment during scale transitions
 - **Multiple scaling behaviors**: uniform, progressive, or none
-- **Rubber-band bounce** at first/last page edges
-- **Dynamic page management** - append and prepend pages at runtime
-- **Pre-fetching callbacks** for neighbor pages
-- **Programmatic navigation** with configurable animations
-- **Scroll callbacks** for hiding/showing UI during transitions
-- **Inner scroll view priority** - nested horizontal ScrollViews work correctly
+- **Dynamic page management** - append, prepend, and remove pages at runtime
+- **Pre-fetching callbacks** for neighbor pages via `Prefetchable` protocol
+- **Programmatic navigation** with `setCurrentPage(_:animated:)`
+- **Combine publishers** for scroll state and page change events
+- **SwiftUI integration** - wrap SwiftUI views with `UIHostingController`
 - **iOS 15+** compatible
 
 ## Installation
@@ -23,7 +22,7 @@ Add the following to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/PageSwipeKit.git", from: "1.0.0")
+    .package(url: "https://github.com/nicothin/PageSwipeKit.git", from: "1.0.0")
 ]
 ```
 
@@ -34,67 +33,76 @@ Or add it directly in Xcode via File → Add Package Dependencies.
 ### Basic Usage
 
 ```swift
+import UIKit
+import PageSwipeKit
+
+let page1 = SwipePage(viewController: MyViewController1())
+let page2 = SwipePage(viewController: MyViewController2())
+let page3 = SwipePage(viewController: MyViewController3())
+
+let pageSwipeController = PageSwipeViewController(
+    pages: [page1, page2, page3]
+)
+```
+
+### With SwiftUI Views
+
+```swift
 import SwiftUI
 import PageSwipeKit
 
-struct ContentView: View {
-    @StateObject private var dataSource = PageSwipeDataSource<Int>(
-        initialPages: [1, 2, 3],
-        initialIndex: 0
-    )
-    
-    var body: some View {
-        PageSwipeView(dataSource: dataSource) { pageID in
-            Text("Page \(pageID)")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.blue)
-        }
-    }
-}
+let swiftUIView = MySwiftUIView()
+let page = SwipePage(
+    view: swiftUIView,
+    prefetchable: myViewModel  // ViewModel conforming to Prefetchable
+)
+
+let pageSwipeController = PageSwipeViewController(pages: [page])
 ```
 
 ### With Configuration
 
 ```swift
-PageSwipeView(
-    dataSource: dataSource,
-    configuration: PageSwipeConfiguration(
-        cornerRadius: 64,
-        pageGap: 8,
-        scalingBehavior: .uniform,
-        transitionScale: 0.92,
-        velocityThreshold: 300,
-        rubberBandResistance: 0.55
-    )
-) { pageID in
-    // Your page content
-}
+let configuration = PageSwipeConfiguration(
+    scalingBehavior: .uniform,
+    transitionScale: 0.92,
+    cornerRadius: 44,
+    velocityThreshold: 300,
+    scaleDownDuration: 0.15,
+    restoreDuration: 0.35,
+    springDamping: 0.8
+)
+
+let pageSwipeController = PageSwipeViewController(
+    pages: pages,
+    configuration: configuration
+)
 ```
 
 ### Using Presets
 
 ```swift
 // Default configuration (uniform scaling)
-PageSwipeView(dataSource: dataSource, configuration: .default) { ... }
+let controller = PageSwipeViewController(pages: pages, configuration: .default)
 
 // No scaling - pages slide without shrinking
-PageSwipeView(dataSource: dataSource, configuration: .noScale) { ... }
+let controller = PageSwipeViewController(pages: pages, configuration: .noScale)
 
 // Progressive scaling - pages scale based on distance from center
-PageSwipeView(dataSource: dataSource, configuration: .progressive) { ... }
+let controller = PageSwipeViewController(pages: pages, configuration: .progressive)
 ```
 
 ## Configuration Options
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `cornerRadius` | `CGFloat` | `64` | Corner radius of pages (matches device corners) |
-| `pageGap` | `CGFloat` | `8` | Gap between pages during transition |
 | `scalingBehavior` | `ScalingBehavior` | `.uniform` | How pages scale during transitions |
 | `transitionScale` | `CGFloat` | `0.92` | Scale factor during transition (0.0-1.0) |
+| `cornerRadius` | `CGFloat` | `44` | Corner radius of pages (matches device corners) |
 | `velocityThreshold` | `CGFloat` | `300` | Swipe velocity to trigger page change |
-| `snapAnimation` | `Animation` | Spring | Animation for snapping to pages |
-| `rubberBandResistance` | `CGFloat` | `0.55` | Edge bounce resistance (0.0-1.0) |
+| `scaleDownDuration` | `TimeInterval` | `0.15` | Duration of scale-down animation |
+| `restoreDuration` | `TimeInterval` | `0.35` | Duration of spring restore animation |
+| `springDamping` | `CGFloat` | `0.8` | Spring damping ratio (0.0-1.0) |
 
 ## Scaling Behaviors
 
@@ -107,61 +115,124 @@ All visible pages scale together when dragging begins, and scale back to full si
 ### `.progressive`
 Pages scale based on their distance from the center. The centered page is full size, while adjacent pages are scaled down.
 
-## Data Source
+## Page Management
 
-`PageSwipeDataSource` manages the collection of pages and provides methods for dynamic updates:
+### Navigation
 
 ```swift
-let dataSource = PageSwipeDataSource<String>(
-    initialPages: ["page1", "page2", "page3"],
-    initialIndex: 0
-)
+// Navigate to a specific page
+pageSwipeController.setCurrentPage(page, animated: true)
 
-// Append pages
-dataSource.append("page4")
-dataSource.append(["page5", "page6"])
+// Go to next/previous page
+pageSwipeController.goToNextPage(animated: true)
+pageSwipeController.goToPreviousPage(animated: true)
 
-// Prepend pages (automatically adjusts current index)
-dataSource.prepend("page0")
-
-// Remove pages
-dataSource.remove(at: 0)
-
-// Navigate programmatically
-dataSource.navigateToIndex(2)
-dataSource.navigateToPage("page3")
-
-// Replace all pages
-dataSource.replaceAll(with: ["new1", "new2"])
+// Check navigation availability
+if pageSwipeController.hasNextPage { ... }
+if pageSwipeController.hasPreviousPage { ... }
 ```
 
-### Callbacks
+### Dynamic Updates
 
 ```swift
-// Called when a page becomes a neighbor (for pre-fetching)
-dataSource.onPageBecameNeighbor = { pageID in
-    loadData(for: pageID)
-}
+// Replace all pages
+pageSwipeController.setPages(newPages, initialPage: specificPage)
 
-// Called when scrolling begins
-dataSource.onScrollBegan = {
-    withAnimation { hideUI = true }
-}
+// Append a page to the end
+pageSwipeController.append(newPage)
 
-// Called when scrolling ends
-dataSource.onScrollEnded = {
-    withAnimation { hideUI = false }
-}
+// Prepend a page (automatically adjusts current index)
+pageSwipeController.prepend(newPage)
+
+// Remove a page
+pageSwipeController.remove(page)
 ```
 
 ### Properties
 
 ```swift
-dataSource.currentPageIndex  // Current page index
-dataSource.currentPageID     // Current page identifier
-dataSource.pageCount         // Total number of pages
-dataSource.pageIDs           // Array of all page identifiers
-dataSource.isScrolling       // Whether currently scrolling
+pageSwipeController.currentPage      // Current SwipePage (nil if empty)
+pageSwipeController.pages            // Array of all pages
+pageSwipeController.isScrolling      // Whether currently scrolling
+pageSwipeController.configuration    // Current configuration (@Published)
+```
+
+## Combine Publishers
+
+```swift
+import Combine
+
+var cancellables = Set<AnyCancellable>()
+
+// Subscribe to page changes (emits current page immediately)
+pageSwipeController.currentPageDidChangePublisher
+    .sink { page in
+        print("Current page: \(page.id)")
+    }
+    .store(in: &cancellables)
+
+// Subscribe to scroll state
+pageSwipeController.scrollingDidBeginPublisher
+    .sink {
+        hideUI()
+    }
+    .store(in: &cancellables)
+
+pageSwipeController.scrollingDidEndPublisher
+    .sink {
+        showUI()
+    }
+    .store(in: &cancellables)
+```
+
+## Prefetching
+
+Implement the `Prefetchable` protocol to load data before a page becomes visible:
+
+```swift
+final class MyViewModel: Prefetchable {
+    func prefetchData() {
+        // Load data for this page
+        Task {
+            await loadContent()
+        }
+    }
+}
+
+// Attach to a page
+let page = SwipePage(
+    viewController: myViewController,
+    prefetchable: myViewModel
+)
+```
+
+Prefetching is automatically triggered when a page becomes a neighbor of the current page.
+
+## SwipePage
+
+`SwipePage` bundles a view controller with optional prefetching:
+
+```swift
+// UIKit view controller
+let page = SwipePage(viewController: myVC)
+
+// With prefetchable
+let page = SwipePage(
+    viewController: myVC,
+    prefetchable: myPrefetchable
+)
+
+// SwiftUI view with prefetchable
+let page = SwipePage(
+    view: MySwiftUIView(),
+    prefetchable: myViewModel
+)
+
+// Custom page ID
+let page = SwipePage(
+    pageId: UUID(),
+    viewController: myVC
+)
 ```
 
 ## Requirements

@@ -2,13 +2,16 @@
 //  ScalingBehavior.swift
 //  PageSwipeKit
 //
-//  Created by stoyan on 20.02.26.
+//  Created by stoyan on 23.02.26.
 //
 
 import Foundation
 
+// MARK: - ScalingBehavior
+
 /// Defines how pages scale during transitions.
-public enum ScalingBehavior: Hashable {
+public enum ScalingBehavior: Hashable, Sendable {
+    
     /// No scaling - pages remain full size during transitions.
     case none
     
