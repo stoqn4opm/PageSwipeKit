@@ -259,7 +259,7 @@ extension PageSwipeViewController {
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.isPagingEnabled = true
         collectionView.showsHorizontalScrollIndicator = false
-        collectionView.backgroundColor = .systemBackground
+        collectionView.backgroundColor = .clear
         collectionView.delegate = self
         collectionView.register(PageCell.self, forCellWithReuseIdentifier: PageCell.identifier)
         collectionView.clipsToBounds = false

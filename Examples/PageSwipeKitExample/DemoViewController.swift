@@ -124,6 +124,7 @@ class DemoViewController: UIViewController {
         ])
         
         pageSwipeVC.didMove(toParent: self)
+        pageSwipeVC.view.backgroundColor = .red
     }
     
     private func setupNavigationBar() {
