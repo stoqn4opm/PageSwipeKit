@@ -90,6 +90,39 @@ public final class PageSwipeViewController: UIViewController {
         applySnapshot(animatingDifferences: false)
     }
     
+    /// A size transition (device rotation, split-screen resize) changes the
+    /// page width under the paging collection view, which both strands the
+    /// content offset between pages and lets interim offsets re-derive a
+    /// wrong "current page" while the animation runs. The current page is
+    /// therefore captured before the bounds change — while the answer is
+    /// still trustworthy — index recomputation is suppressed for the
+    /// duration of the transition, and once the transition settles the
+    /// offset is re-snapped to the captured page and the visible pages'
+    /// views are re-attached to their cells (transient animation cells can
+    /// steal them mid-transition).
+    public override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+
+        guard isViewLoaded else { return }
+
+        let pageToRestore = currentPage
+        isAdjustingContentOffset = true
+
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+            guard let self else { return }
+
+            collectionView.layoutIfNeeded()
+
+            if let pageToRestore {
+                setCurrentPage(pageToRestore, animated: false)
+                collectionView.layoutIfNeeded()
+            }
+            reattachVisiblePageViews()
+
+            isAdjustingContentOffset = false
+        }
+    }
+
     public override var childForStatusBarStyle: UIViewController? {
         currentPageViewController
     }
@@ -531,6 +564,23 @@ extension PageSwipeViewController {
             let distance = abs(normalizedOffset)
             
             return interpolate(from: 1.0, to: configuration.transitionScale, progress: min(distance, 1.0))
+        }
+    }
+}
+
+// MARK: - Size Transition Recovery
+
+extension PageSwipeViewController {
+
+    /// Re-hosts each visible page's view in the cell that survived the size
+    /// transition. `PageCell.configure` is idempotent, so cells that kept
+    /// their view are untouched while cells whose view was stolen by a
+    /// discarded transient cell get it back.
+    private func reattachVisiblePageViews() {
+        for indexPath in collectionView.indexPathsForVisibleItems {
+            guard let cell = collectionView.cellForItem(at: indexPath) as? PageCell,
+                  pages.indices.contains(indexPath.item) else { continue }
+            cell.configure(with: pages[indexPath.item].viewController.view)
         }
     }
 }

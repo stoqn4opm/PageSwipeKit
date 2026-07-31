@@ -33,10 +33,10 @@ final class PageCell: UICollectionViewCell {
     }
     
     // MARK: - Lifecycle
-    
+
     override func prepareForReuse() {
         super.prepareForReuse()
-        hostedView?.removeFromSuperview()
+        removeHostedViewIfStillOwned()
         hostedView = nil
         transform = .identity
         layer.cornerRadius = 0
@@ -46,19 +46,42 @@ final class PageCell: UICollectionViewCell {
 // MARK: - Public Methods
 
 extension PageCell {
-    
+
+    /// Hosts the given view inside the cell's content view.
+    ///
+    /// Idempotent: re-configuring with the view the cell already hosts is a
+    /// no-op, so repeated configuration (e.g. after a size transition) never
+    /// accumulates duplicate constraints. If the view currently lives in
+    /// another cell — a transient animation cell can steal it during a size
+    /// transition — it is re-parented here and constrained afresh.
     func configure(with view: UIView) {
+        guard hostedView !== view || view.superview !== contentView else { return }
+
+        removeHostedViewIfStillOwned()
         hostedView = view
         view.translatesAutoresizingMaskIntoConstraints = false
         view.insetsLayoutMarginsFromSafeArea = false
         contentView.addSubview(view)
-        
+
         NSLayoutConstraint.activate([
             view.topAnchor.constraint(equalTo: contentView.topAnchor),
             view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
+    }
+}
+
+// MARK: - Private Helpers
+
+extension PageCell {
+
+    /// Removes the hosted view only while this cell is still its parent.
+    /// After a size transition another cell may already host the view; a
+    /// discarded transient cell being recycled must not rip it back out.
+    private func removeHostedViewIfStillOwned() {
+        guard let hostedView, hostedView.superview === contentView else { return }
+        hostedView.removeFromSuperview()
     }
 }
 
