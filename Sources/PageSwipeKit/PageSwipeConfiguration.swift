@@ -29,9 +29,13 @@ public struct PageSwipeConfiguration: Sendable {
     public var velocityThreshold: CGFloat
     
     /// Duration of the scale-down animation when dragging begins. Default: 0.15
+    /// Pages stay touchable throughout; a drag that begins mid-animation interrupts it
+    /// and the next transition continues from the on-screen state.
     public var scaleDownDuration: TimeInterval
     
     /// Duration of the spring animation when restoring scale. Default: 0.35
+    /// Pages stay touchable throughout; a drag that begins mid-animation interrupts it
+    /// and the next transition continues from the on-screen state.
     public var restoreDuration: TimeInterval
     
     /// Spring damping ratio for restore animation (0.0-1.0). Default: 0.8

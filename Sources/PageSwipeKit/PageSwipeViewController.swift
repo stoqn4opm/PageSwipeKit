@@ -476,7 +476,7 @@ extension PageSwipeViewController {
         UIView.animate(
             withDuration: configuration.scaleDownDuration,
             delay: 0,
-            options: [.curveEaseOut, .layoutSubviews],
+            options: [.curveEaseOut, .layoutSubviews, .allowUserInteraction],
             animations: {
                 applyTransform()
                 self.collectionView.layoutIfNeeded()
@@ -504,12 +504,30 @@ extension PageSwipeViewController {
             delay: 0,
             usingSpringWithDamping: configuration.springDamping,
             initialSpringVelocity: 0,
-            options: [.layoutSubviews],
+            options: [.layoutSubviews, .allowUserInteraction],
             animations: {
                 applyTransform()
                 self.collectionView.layoutIfNeeded()
             }
         )
+    }
+    
+    /// A drag that begins while the settle animation is still restoring the cells: freeze each
+    /// cell at the scale and corner radius it is currently drawn with, then drop that cell's
+    /// in-flight scale/corner animation, so the scroll-driven scaling continues from what is on
+    /// screen instead of stacking on a running spring or snapping to its end values.
+    private func cancelInFlightScaleAnimations() {
+        for cell in collectionView.visibleCells {
+            let scaleKeys = (cell.layer.animationKeys() ?? []).filter { key in
+                key.hasPrefix("transform") || key.hasPrefix("cornerRadius")
+            }
+            guard !scaleKeys.isEmpty, let presentation = cell.layer.presentation() else { continue }
+            cell.transform = presentation.affineTransform()
+            cell.layer.cornerRadius = presentation.cornerRadius
+            for key in scaleKeys {
+                cell.layer.removeAnimation(forKey: key)
+            }
+        }
     }
     
     private func updateProgressiveScaling() {
@@ -630,6 +648,10 @@ extension PageSwipeViewController: UIScrollViewDelegate {
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         guard !isScrolling else { return }
         
+        // After the guard on purpose: a touch-to-stop during deceleration re-enters with
+        // `isScrolling` still true (and, in uniform mode, the scale-down possibly still running).
+        // Only a drag from rest gets here, and then the only animation in flight is the restore.
+        cancelInFlightScaleAnimations()
         isScrolling = true
         scrollingDidBeginSubject.send()
     }

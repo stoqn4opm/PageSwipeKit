@@ -104,6 +104,8 @@ let controller = PageSwipeViewController(pages: pages, configuration: .progressi
 | `restoreDuration` | `TimeInterval` | `0.35` | Duration of spring restore animation |
 | `springDamping` | `CGFloat` | `0.8` | Spring damping ratio (0.0-1.0) |
 
+Pages stay touchable throughout the scale-down and restore animations. A drag that begins while one is running interrupts it and continues from the on-screen state, so consecutive swipes never have to wait for the settle animation.
+
 ## Scaling Behaviors
 
 ### `.none`
