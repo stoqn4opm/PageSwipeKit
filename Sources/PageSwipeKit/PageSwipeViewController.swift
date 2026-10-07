@@ -42,6 +42,8 @@ public final class PageSwipeViewController: UIViewController {
     private var dataSource: UICollectionViewDiffableDataSource<Int, UUID>!
     @Published private var currentPageIndex: Int = 0
     private var isAdjustingContentOffset = false
+    private var isHandlingSizeTransition = false
+    private var laidOutPageSize: CGSize = .zero
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Private Subjects
@@ -97,9 +99,11 @@ public final class PageSwipeViewController: UIViewController {
     /// therefore captured before the bounds change — while the answer is
     /// still trustworthy — index recomputation is suppressed for the
     /// duration of the transition, and once the transition settles the
-    /// offset is re-snapped to the captured page and the visible pages'
-    /// views are re-attached to their cells (transient animation cells can
-    /// steal them mid-transition).
+    /// pages are re-laid out at the new size, the offset is re-snapped to
+    /// the captured page and the visible pages' views are re-attached to
+    /// their cells (transient animation cells can steal them mid-transition).
+    /// While the transition runs, the layout-pass recovery in
+    /// `viewDidLayoutSubviews` stands down so the page is re-snapped once.
     public override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
 
@@ -107,20 +111,28 @@ public final class PageSwipeViewController: UIViewController {
 
         let pageToRestore = currentPage
         isAdjustingContentOffset = true
+        isHandlingSizeTransition = true
 
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
             guard let self else { return }
 
             collectionView.layoutIfNeeded()
+            resnapPages(to: pageToRestore)
 
-            if let pageToRestore {
-                setCurrentPage(pageToRestore, animated: false)
-                collectionView.layoutIfNeeded()
-            }
-            reattachVisiblePageViews()
-
+            isHandlingSizeTransition = false
             isAdjustingContentOffset = false
         }
+    }
+
+    /// The view's size can change without a size transition ever reaching
+    /// this controller: it sits in a split view column whose width is
+    /// animated, a sidebar tiles in or out beside it, or its container is
+    /// resized. The layout pass that applies the new bounds is the one place
+    /// every such change passes through, so the recovery a size transition
+    /// gets is run from here too.
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        resnapPagesIfBoundsSizeChanged()
     }
 
     public override var childForStatusBarStyle: UIViewController? {
@@ -586,9 +598,69 @@ extension PageSwipeViewController {
     }
 }
 
-// MARK: - Size Transition Recovery
+// MARK: - Size Change Recovery
 
 extension PageSwipeViewController {
+
+    /// Whether the pages are still laid out for a bounds size the collection
+    /// view has since left. `UICollectionViewFlowLayout` caches the item size
+    /// it got from `sizeForItemAt` and does not ask again when the bounds
+    /// change, so after a resize the pages keep their old size until the
+    /// layout is invalidated. Empty bounds show nothing and are not laid out
+    /// for: the pages wait for the next non-empty size.
+    private var hasStalePageSize: Bool {
+        !collectionView.bounds.isEmpty && collectionView.bounds.size != laidOutPageSize
+    }
+
+    /// Re-lays the pages out after a bounds change that no size transition
+    /// is handling. A live scroll is not fought: it is re-snapped once it
+    /// ends (see `scrollingDidEnd`). The current page needs no capturing
+    /// here — while the page size is stale the content offset is not
+    /// allowed to re-derive it (see `canDeriveCurrentPageIndex`), so it is
+    /// still the page from before the change.
+    private func resnapPagesIfBoundsSizeChanged() {
+        guard hasStalePageSize, !isHandlingSizeTransition, !isScrolling else { return }
+        resnapPages(to: currentPage)
+    }
+
+    /// Re-lays the pages out at the collection view's current bounds and
+    /// snaps the content offset onto `page`'s new origin without animation:
+    /// the layout is invalidated so every page takes the new size, the
+    /// offset is moved before the cells are laid out (one layout pass, no
+    /// cells dequeued for the stranded offset) and the visible pages' views
+    /// are re-hosted. The current page index is written only when it
+    /// differs, so a re-snap never announces a page change that did not
+    /// happen.
+    private func resnapPages(to page: SwipePage?) {
+        let wasAdjustingContentOffset = isAdjustingContentOffset
+        isAdjustingContentOffset = true
+        defer { isAdjustingContentOffset = wasAdjustingContentOffset }
+
+        collectionView.collectionViewLayout.invalidateLayout()
+
+        if let page, let index = pages.firstIndex(where: { $0.id == page.id }) {
+            let pageOrigin = CGPoint(x: CGFloat(index) * collectionView.bounds.width, y: 0)
+            collectionView.setContentOffset(pageOrigin, animated: false)
+            if currentPageIndex != index {
+                currentPageIndex = index
+            }
+        }
+
+        collectionView.layoutIfNeeded()
+        reattachVisiblePageViews()
+        laidOutPageSize = collectionView.bounds.size
+    }
+
+    /// The content offset names the current page only in units of the page
+    /// width the cells are laid out with. Until a bounds change is
+    /// re-snapped the two disagree — the scroll view may even clamp the
+    /// offset onto another page — so the page from before the change
+    /// stands. A user-driven scroll is the exception: it pages in the
+    /// current bounds' units and is re-snapped to wherever it ends.
+    private func canDeriveCurrentPageIndex(from scrollView: UIScrollView) -> Bool {
+        guard !isAdjustingContentOffset else { return false }
+        return isScrolling || scrollView.bounds.size == laidOutPageSize
+    }
 
     /// Re-hosts each visible page's view in the cell that survived the size
     /// transition. `PageCell.configure` is idempotent, so cells that kept
@@ -660,7 +732,7 @@ extension PageSwipeViewController: UIScrollViewDelegate {
         let pageWidth = scrollView.bounds.width
         guard pageWidth > 0 else { return }
         
-        if !isAdjustingContentOffset {
+        if canDeriveCurrentPageIndex(from: scrollView) {
             updateCurrentPageIndexIfNeeded(for: scrollView)
         }
         
@@ -722,6 +794,7 @@ extension PageSwipeViewController {
         guard isScrolling else { return }
         
         isScrolling = false
+        resnapPagesIfBoundsSizeChanged()
         scrollingDidEndSubject.send()
     }
 }

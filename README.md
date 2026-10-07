@@ -12,6 +12,7 @@ A UIKit-based paging controller that mimics the iOS app switcher behavior with s
 - **Programmatic navigation** with `setCurrentPage(_:animated:)`
 - **Combine publishers** for scroll state and page change events
 - **SwiftUI integration** - wrap SwiftUI views with `UIHostingController`
+- **Resize-safe** - pages follow the controller's size and stay on the current page through rotations, window resizes and split view column changes
 - **iOS 15+** compatible
 
 ## Installation
@@ -236,6 +237,10 @@ let page = SwipePage(
     viewController: myVC
 )
 ```
+
+## Resizing
+
+Pages always take the controller's size, and a size change keeps the current page. Rotations and window resizes arrive as size transitions; the controller also re-lays its pages out when its view is resized without one — a split view column whose width is animated, a sidebar tiling in or out beside it, or any container that changes its frame or constraints. A resize that lands during a live swipe is not fought: the pages are re-snapped once the swipe settles.
 
 ## Requirements
 
