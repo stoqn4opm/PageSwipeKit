@@ -240,7 +240,7 @@ let page = SwipePage(
 
 ## Resizing
 
-Pages always take the controller's size, and a size change keeps the current page. Rotations and window resizes arrive as size transitions; the controller also re-lays its pages out when its view is resized without one — a split view column whose width is animated, a sidebar tiling in or out beside it, or any container that changes its frame or constraints. A resize that lands during a live swipe is not fought: the pages are re-snapped once the swipe settles.
+Pages always take the controller's size, and a size change keeps the current page. Rotations and window resizes arrive as size transitions; the controller also re-lays its pages out when its view is resized without one — a split view column whose width is animated, a sidebar tiling in or out beside it, or any container that changes its frame or constraints. A resize that lands during a live swipe is not fought: the pages are re-snapped once the swipe settles. A size transition that is out of step with its resize is handled too: one that ends before the new size reaches the view, such as an unfold that reaches the controller while it is off screen, or one that ends with the new size still pending.
 
 ## Requirements
 

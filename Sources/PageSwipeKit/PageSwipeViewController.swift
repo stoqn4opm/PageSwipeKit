@@ -39,6 +39,7 @@ public final class PageSwipeViewController: UIViewController {
     // MARK: - Private Properties
     
     private var collectionView: UICollectionView!
+    private let pageLayout = UICollectionViewFlowLayout()
     private var dataSource: UICollectionViewDiffableDataSource<Int, UUID>!
     @Published private var currentPageIndex: Int = 0
     private var isAdjustingContentOffset = false
@@ -104,6 +105,13 @@ public final class PageSwipeViewController: UIViewController {
     /// their cells (transient animation cells can steal them mid-transition).
     /// While the transition runs, the layout-pass recovery in
     /// `viewDidLayoutSubviews` stands down so the page is re-snapped once.
+    ///
+    /// The transition does not always end after its bounds change: it can
+    /// end while the controller is out of the window, before it gets the new
+    /// size, or while the new size is still pending, so that the re-snap's
+    /// own layout pass applies it. The layout pass that brings the new size
+    /// later re-snaps the first; the bounds size is re-checked once the
+    /// transition has ended for the second.
     public override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
 
@@ -121,6 +129,7 @@ public final class PageSwipeViewController: UIViewController {
 
             isHandlingSizeTransition = false
             isAdjustingContentOffset = false
+            resnapPagesIfBoundsSizeChanged()
         }
     }
 
@@ -295,12 +304,11 @@ extension PageSwipeViewController {
 extension PageSwipeViewController {
     
     private func setupCollectionView() {
-        let layout = UICollectionViewFlowLayout()
-        layout.scrollDirection = .horizontal
-        layout.minimumLineSpacing = 0
-        layout.minimumInteritemSpacing = 0
+        pageLayout.scrollDirection = .horizontal
+        pageLayout.minimumLineSpacing = 0
+        pageLayout.minimumInteritemSpacing = 0
         
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: pageLayout)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.isPagingEnabled = true
         collectionView.showsHorizontalScrollIndicator = false
@@ -603,13 +611,18 @@ extension PageSwipeViewController {
 extension PageSwipeViewController {
 
     /// Whether the pages are still laid out for a bounds size the collection
-    /// view has since left. `UICollectionViewFlowLayout` caches the item size
-    /// it got from `sizeForItemAt` and does not ask again when the bounds
-    /// change, so after a resize the pages keep their old size until the
-    /// layout is invalidated. Empty bounds show nothing and are not laid out
-    /// for: the pages wait for the next non-empty size.
+    /// view has since left. The pages take the flow layout's item size, which
+    /// is only ever set by a re-snap, so after a resize they keep their old
+    /// size until the next one. Empty bounds show nothing and are not laid
+    /// out for: the pages wait for the next non-empty size.
     private var hasStalePageSize: Bool {
         !collectionView.bounds.isEmpty && collectionView.bounds.size != laidOutPageSize
+    }
+
+    /// Whether the pages have been given a size yet. Until then they have the
+    /// flow layout's placeholder item size.
+    private var hasLaidOutPages: Bool {
+        laidOutPageSize != .zero
     }
 
     /// Re-lays the pages out after a bounds change that no size transition
@@ -617,29 +630,43 @@ extension PageSwipeViewController {
     /// ends (see `scrollingDidEnd`). The current page needs no capturing
     /// here — while the page size is stale the content offset is not
     /// allowed to re-derive it (see `canDeriveCurrentPageIndex`), so it is
-    /// still the page from before the change.
+    /// still the page from before the change. The pages' first layout is
+    /// not held back by a size transition: there is no offset to keep yet,
+    /// and the transition re-snaps them again once it ends.
     private func resnapPagesIfBoundsSizeChanged() {
-        guard hasStalePageSize, !isHandlingSizeTransition, !isScrolling else { return }
+        guard hasStalePageSize, !isScrolling else { return }
+        guard !isHandlingSizeTransition || !hasLaidOutPages else { return }
         resnapPages(to: currentPage)
     }
 
     /// Re-lays the pages out at the collection view's current bounds and
     /// snaps the content offset onto `page`'s new origin without animation:
-    /// the layout is invalidated so every page takes the new size, the
+    /// every page takes the bounds size as the flow layout's item size, the
     /// offset is moved before the cells are laid out (one layout pass, no
     /// cells dequeued for the stranded offset) and the visible pages' views
     /// are re-hosted. The current page index is written only when it
     /// differs, so a re-snap never announces a page change that did not
     /// happen.
+    ///
+    /// The size is set rather than answered from `sizeForItemAt`: once the
+    /// layout has been invalidated at one size, the flow layout does not
+    /// reliably ask its delegate again after the bounds change, and the
+    /// pages would keep the old size. The size recorded as laid out is the
+    /// one read here, not the bounds after the layout pass: laying the
+    /// collection view out also lays out ancestors waiting for a layout,
+    /// which can apply a pending resize, and the pages were not laid out
+    /// for that one.
     private func resnapPages(to page: SwipePage?) {
         let wasAdjustingContentOffset = isAdjustingContentOffset
         isAdjustingContentOffset = true
         defer { isAdjustingContentOffset = wasAdjustingContentOffset }
 
-        collectionView.collectionViewLayout.invalidateLayout()
+        let pageSize = collectionView.bounds.size
+        pageLayout.itemSize = pageSize
+        pageLayout.invalidateLayout()
 
         if let page, let index = pages.firstIndex(where: { $0.id == page.id }) {
-            let pageOrigin = CGPoint(x: CGFloat(index) * collectionView.bounds.width, y: 0)
+            let pageOrigin = CGPoint(x: CGFloat(index) * pageSize.width, y: 0)
             collectionView.setContentOffset(pageOrigin, animated: false)
             if currentPageIndex != index {
                 currentPageIndex = index
@@ -648,7 +675,7 @@ extension PageSwipeViewController {
 
         collectionView.layoutIfNeeded()
         reattachVisiblePageViews()
-        laidOutPageSize = collectionView.bounds.size
+        laidOutPageSize = pageSize
     }
 
     /// The content offset names the current page only in units of the page
@@ -693,10 +720,6 @@ extension PageSwipeViewController {
 // MARK: - UICollectionViewDelegateFlowLayout
 
 extension PageSwipeViewController: UICollectionViewDelegateFlowLayout {
-    
-    public func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        collectionView.bounds.size
-    }
     
     public func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         let scale = scaleForCell(at: indexPath)

@@ -20,7 +20,7 @@ import UIKit
 /// through plain constraint or frame changes and no size transition is
 /// forwarded to it.
 @MainActor
-private final class ColumnHostViewController: UIViewController {
+final class ColumnHostViewController: UIViewController {
 
     let child: PageSwipeViewController
     private let initialColumnWidth: CGFloat
@@ -71,6 +71,19 @@ private final class ColumnHostViewController: UIViewController {
         columnWidthConstraint = nil
         child.view.translatesAutoresizingMaskIntoConstraints = true
     }
+
+    /// Takes the child's view out of the window, the way a navigation stack
+    /// takes a screen off screen. The child stays a child.
+    func removeColumnFromWindow() {
+        NSLayoutConstraint.deactivate(columnConstraints)
+        child.view.removeFromSuperview()
+    }
+
+    /// Puts the child's view back into the column it was taken out of.
+    func returnColumnToWindow() {
+        view.addSubview(child.view)
+        NSLayoutConstraint.activate(columnConstraints)
+    }
 }
 
 private let windowFrame = CGRect(x: 0, y: 0, width: 1194, height: 834)
@@ -81,7 +94,7 @@ private let wideColumnWidth: CGFloat = 834
 /// window, already showing page `pageIndex`. The window is returned so the
 /// test keeps it alive.
 @MainActor
-private func createColumnHostedController(
+func createColumnHostedController(
     pageCount: Int = 5,
     showingPageAt pageIndex: Int,
     columnWidth: CGFloat,
@@ -103,7 +116,7 @@ private func createColumnHostedController(
 }
 
 @MainActor
-private func indexOfCurrentPage(in controller: PageSwipeViewController) -> Int? {
+func indexOfCurrentPage(in controller: PageSwipeViewController) -> Int? {
     controller.pages.firstIndex { $0.id == controller.currentPage?.id }
 }
 
@@ -112,7 +125,7 @@ private func indexOfCurrentPage(in controller: PageSwipeViewController) -> Int? 
 /// offset sits exactly on the page's origin, no neighbour page peeks into
 /// the viewport, and each visible page's view is hosted by its own cell.
 @MainActor
-private func expectSnapped(
+func expectSnapped(
     _ controller: PageSwipeViewController,
     onPageAt pageIndex: Int,
     columnWidth: CGFloat,
